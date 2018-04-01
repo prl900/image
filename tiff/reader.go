@@ -163,7 +163,7 @@ func (d *decoder) parseIFD(p []byte) (int, error) {
 			return 0, err
 		}
 		for _, v := range val {
-			if v != 1 {
+			if v != 1 || v != 2 {
 				return 0, UnsupportedError("sample format")
 			}
 		}
