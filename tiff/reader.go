@@ -17,7 +17,7 @@ import (
 	"io/ioutil"
 	"math"
 
-	"golang.org/x/image/tiff/lzw"
+	"github.com/prl900/image/tiff/lzw"
 )
 
 // A FormatError reports that the input is not a valid TIFF image.
