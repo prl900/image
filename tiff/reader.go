@@ -206,6 +206,7 @@ func minInt(a, b int) int {
 // decode decodes the raw data of an image.
 // It reads from d.buf and writes the strip or tile into dst.
 func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
+	fmt.Printf("call to decode(%d, %d, %d, %d)\n", xmin, ymin, xmax, ymax)
 	d.off = 0
 
 	// Apply horizontal predictor if necessary.
