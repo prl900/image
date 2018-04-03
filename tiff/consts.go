@@ -29,10 +29,17 @@ const (
 	dtShort    = 3
 	dtLong     = 4
 	dtRational = 5
+	dtInt8     = 6
+    dtUndefined = 7
+    dtInt16     = 8
+    dtInt32     = 9
+    dtSRational = 10
+    dtFloat32   = 11
+	dtFloat64   = 12
 )
 
 // The length of one instance of each data type in bytes.
-var lengths = [...]uint32{0, 1, 1, 2, 4, 8}
+var lengths = [...]uint32{0, 1, 1, 2, 4, 8, 1, 0, 2, 4, 8, 4, 8}
 
 // Tags (see p. 28-41 of the spec).
 const (
@@ -52,14 +59,27 @@ const (
 	tTileOffsets    = 324
 	tTileByteCounts = 325
 
+	tOrientation    = 274
 	tXResolution    = 282
 	tYResolution    = 283
+	tXPosition      = 286
+	tYPosition      = 287
 	tResolutionUnit = 296
 
 	tPredictor    = 317
 	tColorMap     = 320
 	tExtraSamples = 338
 	tSampleFormat = 339
+
+	// GeoTIFF tags
+	tModelTiepoint = 33922
+	tModelTransformation =  34264
+	tModelPixelScale = 33550
+
+
+	// GDAL tags
+	tGDALMetadata = 42112
+	tGDALNoData = 42113
 )
 
 // Compression types (defined in various places in the spec and supplements).

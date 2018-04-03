@@ -18,6 +18,7 @@ import (
 	"math"
 
 	"github.com/prl900/image/tiff/lzw"
+	"strconv"
 )
 
 // A FormatError reports that the input is not a valid TIFF image.
@@ -45,6 +46,7 @@ type decoder struct {
 	bpp       uint
 	features  map[int][]uint
 	palette   []color.Color
+	noData float64
 
 	buf   []byte
 	off   int    // Current offset in buf.
@@ -92,7 +94,7 @@ func (d *decoder) ifdUint(p []byte) (u []uint, err error) {
 
 	u = make([]uint, count)
 	switch datatype {
-	case dtByte:
+	case dtByte, dtASCII:
 		for i := uint32(0); i < count; i++ {
 			u[i] = uint(raw[i])
 		}
@@ -103,6 +105,11 @@ func (d *decoder) ifdUint(p []byte) (u []uint, err error) {
 	case dtLong:
 		for i := uint32(0); i < count; i++ {
 			u[i] = uint(d.byteOrder.Uint32(raw[4*i : 4*(i+1)]))
+		}
+	case dtFloat64:
+		for i := uint32(0); i < count; i++ {
+			bits := binary.LittleEndian.Uint64(raw[8*i : 8*(i+1)])
+			fmt.Println(math.Float64frombits(bits))
 		}
 	default:
 		return nil, UnsupportedError("data type")
@@ -135,6 +142,35 @@ func (d *decoder) parseIFD(p []byte) (int, error) {
 			return 0, err
 		}
 		d.features[int(tag)] = val
+	case tOrientation,
+	     tXResolution,
+		tYResolution,
+		tXPosition,
+		tYPosition,
+		tResolutionUnit:
+		fmt.Println("AAAA")
+		d.ifdUint(p)
+
+	case tModelTiepoint,
+	     tModelTransformation,
+	     tModelPixelScale:
+		fmt.Println("BBBB", len(p))
+		d.ifdUint(p)
+
+	case tGDALNoData:
+		val, err := d.ifdUint(p)
+		if err != nil {
+			return 0, err
+		}
+		str := make([]byte, len(val))
+		for i, v := range val {
+			str[i] = byte(v)
+		}
+		f, err := strconv.ParseFloat(string(str[:len(str)-1]), 64)
+		if err != nil {
+			return 0, err
+		}
+		d.noData = f
 	case tColorMap:
 		val, err := d.ifdUint(p)
 		if err != nil {
@@ -206,7 +242,6 @@ func minInt(a, b int) int {
 // decode decodes the raw data of an image.
 // It reads from d.buf and writes the strip or tile into dst.
 func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
-	fmt.Printf("call to decode(%d, %d, %d, %d)\n", xmin, ymin, xmax, ymax)
 	d.off = 0
 
 	// Apply horizontal predictor if necessary.
@@ -264,6 +299,10 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 						v = 0xffff - v
 					}
 					img.SetGray16(x, y, color.Gray16{v})
+				}
+				if rMaxX == dst.Bounds().Max.X {
+					fmt.Println("MMMMMMMMMM")
+					d.off += 2*(xmax - dst.Bounds().Max.X)
 				}
 			}
 		} else {
