@@ -300,10 +300,11 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 					}
 					img.SetGray16(x, y, color.Gray16{v})
 				}
+				/*
 				if rMaxX == dst.Bounds().Max.X {
-					fmt.Println("MMMMMMMMMM")
 					d.off += 2*(xmax - dst.Bounds().Max.X)
 				}
+				*/
 			}
 		} else {
 			img := dst.(*image.Gray)
