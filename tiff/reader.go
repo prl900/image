@@ -119,7 +119,6 @@ func (d *decoder) ifdUint(p []byte) (u []uint, err error) {
 	case dtFloat64:
 		for i := uint32(0); i < count; i++ {
 			u[i] = uint(binary.LittleEndian.Uint64(raw[8*i : 8*(i+1)]))
-			fmt.Println("IFD Call:", u)
 		}
 	default:
 		return nil, UnsupportedError("data type")
@@ -158,11 +157,9 @@ func (d *decoder) parseIFD(p []byte) (int, error) {
 		tXPosition,
 		tYPosition,
 		tResolutionUnit:
-		fmt.Println("Orientation")
 		d.ifdUint(p)
 
 	case tModelTiepoint:
-		fmt.Println("ModelTiePoint")
 		val, err := d.ifdUint(p)
 		if err != nil {
 			return 0, err
@@ -336,11 +333,9 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 					}
 					img.SetGray16(x, y, color.Gray16{v})
 				}
-				/*
-					if rMaxX == img.Bounds().Max.X {
-						d.off += 2*(xmax - img.Bounds().Max.X)
-					}
-				*/
+				if rMaxX == img.Bounds().Max.X {
+					d.off += 2 * (xmax - img.Bounds().Max.X)
+				}
 			}
 		} else {
 			img := dst.(*image.Gray)
