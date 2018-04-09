@@ -46,7 +46,7 @@ type decoder struct {
 	bpp       uint
 	features  map[int][]uint
 	palette   []color.Color
-	noData float64
+	noData    float64
 
 	buf   []byte
 	off   int    // Current offset in buf.
@@ -143,18 +143,16 @@ func (d *decoder) parseIFD(p []byte) (int, error) {
 		}
 		d.features[int(tag)] = val
 	case tOrientation,
-	     tXResolution,
+		tXResolution,
 		tYResolution,
 		tXPosition,
 		tYPosition,
 		tResolutionUnit:
-		fmt.Println("AAAA")
 		d.ifdUint(p)
 
 	case tModelTiepoint,
-	     tModelTransformation,
-	     tModelPixelScale:
-		fmt.Println("BBBB", len(p))
+		tModelTransformation,
+		tModelPixelScale:
 		d.ifdUint(p)
 
 	case tGDALNoData:
@@ -301,9 +299,9 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 					img.SetGray16(x, y, color.Gray16{v})
 				}
 				/*
-				if rMaxX == dst.Bounds().Max.X {
-					d.off += 2*(xmax - dst.Bounds().Max.X)
-				}
+					if rMaxX == img.Bounds().Max.X {
+						d.off += 2*(xmax - img.Bounds().Max.X)
+					}
 				*/
 			}
 		} else {
