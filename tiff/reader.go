@@ -106,11 +106,12 @@ func (d *decoder) ifdUint(p []byte) (u []uint, err error) {
 		for i := uint32(0); i < count; i++ {
 			u[i] = uint(d.byteOrder.Uint32(raw[4*i : 4*(i+1)]))
 		}
-	case dtFloat64:
-		for i := uint32(0); i < count; i++ {
-			bits := binary.LittleEndian.Uint64(raw[8*i : 8*(i+1)])
-			fmt.Println(math.Float64frombits(bits))
-		}
+	/*
+		case dtFloat64:
+			for i := uint32(0); i < count; i++ {
+				bits := binary.LittleEndian.Uint64(raw[8*i : 8*(i+1)])
+			}
+	*/
 	default:
 		return nil, UnsupportedError("data type")
 	}
