@@ -19,15 +19,9 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/prl900/geowarp"
 	"github.com/prl900/image/tiff/lzw"
 )
-
-// TODO: Hack here to create a new type with metadata
-type GeoImage struct {
-	*image.Gray16
-	GeoTrans []float64
-	NoData   float64
-}
 
 // A FormatError reports that the input is not a valid TIFF image.
 type FormatError string
@@ -131,6 +125,7 @@ func (d *decoder) ifdUint(p []byte) (u []uint, err error) {
 // entry and an error, if any.
 func (d *decoder) parseIFD(p []byte) (int, error) {
 	tag := d.byteOrder.Uint16(p[0:2])
+
 	switch tag {
 	case tBitsPerSample,
 		tExtraSamples,
@@ -170,11 +165,20 @@ func (d *decoder) parseIFD(p []byte) (int, error) {
 			d.tiePoint[i] = math.Float64frombits(uint64(v))
 		}
 
-	/*
-		case tModelTransformation:
-			fmt.Println("ModelTransformation")
-			d.ifdUint(p)
-	*/
+	//* TODO: Need to find Projection info
+	case tGeoKeyDirectory:
+		fmt.Println("BBB")
+		val, err := d.ifdUint(p)
+		if err != nil {
+			return 0, err
+		}
+		if len(val)%4 != 0 {
+			return 0, err
+		}
+		fmt.Println("AAA", len(val))
+		for i := 0; i < (len(val) / 4); i++ {
+			fmt.Printf("KeyID: %d, TIFFTagLocation: %d, Count: %d, Value_Offset: %d\n", val[i*4], val[(i*4)+1], val[(i*4)+2], val[(i*4)+3])
+		}
 
 	case tModelPixelScale:
 		val, err := d.ifdUint(p)
@@ -318,8 +322,7 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 	switch d.mode {
 	case mGray, mGrayInvert:
 		if d.bpp == 16 {
-			//img := dst.(*image.Gray16)
-			img := dst.(*GeoImage)
+			img := dst.(*geowarp.GrayGeoRaster16)
 
 			for y := ymin; y < rMaxY; y++ {
 				for x := xmin; x < rMaxX; x++ {
@@ -670,7 +673,7 @@ func Decode(r io.Reader) (img image.Image, err error) {
 	case mGray, mGrayInvert:
 		if d.bpp == 16 {
 			// TODO: This is a hack to test new geospatial types that implement the Image interface
-			img = &GeoImage{image.NewGray16(imgRect), []float64{d.tiePoint[3], d.pixScale[0], 0, d.tiePoint[4], 0, d.pixScale[1]}, d.noData}
+			img = &geowarp.GrayGeoRaster16{image.NewGray16(imgRect), "", []float64{d.tiePoint[3], d.pixScale[0], 0, d.tiePoint[4], 0, -1 * d.pixScale[1]}, d.noData}
 		} else {
 			img = image.NewGray(imgRect)
 		}
