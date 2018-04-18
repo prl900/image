@@ -203,6 +203,17 @@ const (
 	resPerCM   = 3 // Dots per centimeter.
 )
 
+// sampleFormat represents the mode of the image.
+type sampleFormat int
+
+const (
+	_ sampleFormat = iota
+	uintSample
+	sintSample
+	ieeefpSample
+	voidSample
+)
+
 // imageMode represents the mode of the image.
 type imageMode int
 

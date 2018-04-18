@@ -19,8 +19,10 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/prl900/geowarp"
+	//"github.com/prl900/geowarp"
 	"github.com/prl900/image/tiff/lzw"
+	"github.com/prl900/scimage"
+	"github.com/prl900/scimage/scicolor"
 )
 
 // A FormatError reports that the input is not a valid TIFF image.
@@ -45,6 +47,7 @@ type decoder struct {
 	byteOrder binary.ByteOrder
 	config    image.Config
 	mode      imageMode
+	sFormat   sampleFormat
 	bpp       uint
 	features  map[int][]uint
 	palette   []color.Color
@@ -112,7 +115,7 @@ func (d *decoder) ifdUint(p []byte) (u []uint, err error) {
 		}
 	case dtFloat64:
 		for i := uint32(0); i < count; i++ {
-			u[i] = uint(binary.LittleEndian.Uint64(raw[8*i : 8*(i+1)]))
+			u[i] = uint(d.byteOrder.Uint64(raw[8*i : 8*(i+1)]))
 		}
 	default:
 		return nil, UnsupportedError("data type")
@@ -225,19 +228,11 @@ func (d *decoder) parseIFD(p []byte) (int, error) {
 			}
 		}
 	case tSampleFormat:
-		// Page 27 of the spec: If the SampleFormat is present and
-		// the value is not 1 [= unsigned integer data], a Baseline
-		// TIFF reader that cannot handle the SampleFormat value
-		// must terminate the import process gracefully.
 		val, err := d.ifdUint(p)
 		if err != nil {
 			return 0, err
 		}
-		for _, v := range val {
-			if v != 1 && v != 2 {
-				return 0, UnsupportedError("sample format")
-			}
-		}
+		d.sFormat = sampleFormat(val[0])
 	}
 	return int(tag), nil
 }
@@ -319,43 +314,86 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 
 	rMaxX := minInt(xmax, dst.Bounds().Max.X)
 	rMaxY := minInt(ymax, dst.Bounds().Max.Y)
+
 	switch d.mode {
 	case mGray, mGrayInvert:
-		if d.bpp == 16 {
-			img := dst.(*geowarp.GrayGeoRaster16)
-
-			for y := ymin; y < rMaxY; y++ {
-				for x := xmin; x < rMaxX; x++ {
-					if d.off+2 > len(d.buf) {
-						return errNoPixels
+		switch d.sFormat {
+		case uintSample:
+			if d.bpp == 16 {
+				img := dst.(*scimage.GrayU16)
+				for y := ymin; y < rMaxY; y++ {
+					for x := xmin; x < rMaxX; x++ {
+						if d.off+2 > len(d.buf) {
+							return errNoPixels
+						}
+						v := uint16(d.buf[d.off+0])<<8 | uint16(d.buf[d.off+1])
+						d.off += 2
+						if d.mode == mGrayInvert {
+							v = 0xffff - v
+						}
+						img.SetGrayU16(x, y, scicolor.GrayU16{v, img.Min, img.Max})
 					}
-					v := d.byteOrder.Uint16(d.buf[d.off : d.off+2])
-					d.off += 2
-					if d.mode == mGrayInvert {
-						v = 0xffff - v
+					if rMaxX == img.Bounds().Max.X {
+						d.off += 2 * (xmax - img.Bounds().Max.X)
 					}
-					img.SetGray16(x, y, color.Gray16{v})
 				}
-				if rMaxX == img.Bounds().Max.X {
-					d.off += 2 * (xmax - img.Bounds().Max.X)
+			} else {
+				img := dst.(*scimage.GrayU8)
+				max := uint32((1 << d.bpp) - 1)
+				for y := ymin; y < rMaxY; y++ {
+					for x := xmin; x < rMaxX; x++ {
+						v, ok := d.readBits(d.bpp)
+						if !ok {
+							return errNoPixels
+						}
+						v = v * 0xff / max
+						if d.mode == mGrayInvert {
+							v = 0xff - v
+						}
+						img.SetGrayU8(x, y, scicolor.GrayU8{uint8(v), img.Min, img.Max})
+					}
+					d.flushBits()
 				}
 			}
-		} else {
-			img := dst.(*image.Gray)
-			max := uint32((1 << d.bpp) - 1)
-			for y := ymin; y < rMaxY; y++ {
-				for x := xmin; x < rMaxX; x++ {
-					v, ok := d.readBits(d.bpp)
-					if !ok {
-						return errNoPixels
+		case sintSample:
+			if d.bpp == 16 {
+				img := dst.(*scimage.GrayS16)
+				for y := ymin; y < rMaxY; y++ {
+					for x := xmin; x < rMaxX; x++ {
+						if d.off+2 > len(d.buf) {
+							return errNoPixels
+						}
+						v := int16(d.buf[d.off+0])<<8 | int16(d.buf[d.off+1])
+						d.off += 2
+						//TODO Invert a signed int?
+						/*
+						if d.mode == mGrayInvert {
+							v = 0xffff - v
+						}*/
+						img.SetGrayS16(x, y, scicolor.GrayS16{v, img.Min, img.Max})
 					}
-					v = v * 0xff / max
-					if d.mode == mGrayInvert {
-						v = 0xff - v
+					if rMaxX == img.Bounds().Max.X {
+						d.off += 2 * (xmax - img.Bounds().Max.X)
 					}
-					img.SetGray(x, y, color.Gray{uint8(v)})
 				}
-				d.flushBits()
+			} else {
+				img := dst.(*scimage.GrayS8)
+				max := uint32((1 << d.bpp) - 1)
+				for y := ymin; y < rMaxY; y++ {
+					for x := xmin; x < rMaxX; x++ {
+						v, ok := d.readBits(d.bpp)
+						if !ok {
+							return errNoPixels
+						}
+						v = v * 0xff / max
+						//TODO Invert a signed int?
+						/*if d.mode == mGrayInvert {
+							v = 0xff - v
+						}*/
+						img.SetGrayS8(x, y, scicolor.GrayS8{int8(v), img.Min, img.Max})
+					}
+					d.flushBits()
+				}
 			}
 		}
 	case mPaletted:
@@ -583,16 +621,16 @@ func newDecoder(r io.Reader) (*decoder, error) {
 	case pWhiteIsZero:
 		d.mode = mGrayInvert
 		if d.bpp == 16 {
-			d.config.ColorModel = color.Gray16Model
+			d.config.ColorModel = scicolor.GrayU16Model{Min: 0, Max: 10000}
 		} else {
-			d.config.ColorModel = color.GrayModel
+			d.config.ColorModel = scicolor.GrayU8Model{Min: 0, Max: 255}
 		}
 	case pBlackIsZero:
 		d.mode = mGray
 		if d.bpp == 16 {
-			d.config.ColorModel = color.Gray16Model
+			d.config.ColorModel = scicolor.GrayU16Model{Min: 0, Max: 10000}
 		} else {
-			d.config.ColorModel = color.GrayModel
+			d.config.ColorModel = scicolor.GrayU8Model{Min: 0, Max: 255}
 		}
 	default:
 		return nil, UnsupportedError("color model")
@@ -671,11 +709,24 @@ func Decode(r io.Reader) (img image.Image, err error) {
 	imgRect := image.Rect(0, 0, d.config.Width, d.config.Height)
 	switch d.mode {
 	case mGray, mGrayInvert:
-		if d.bpp == 16 {
-			// TODO: This is a hack to test new geospatial types that implement the Image interface
-			img = &geowarp.GrayGeoRaster16{image.NewGray16(imgRect), "", []float64{d.tiePoint[3], d.pixScale[0], 0, d.tiePoint[4], 0, -1 * d.pixScale[1]}, d.noData}
-		} else {
-			img = image.NewGray(imgRect)
+		switch d.sFormat {
+		case uintSample:
+			if d.bpp == 16 {
+				// TODO: This is a hack to test new geospatial types that implement the Image interface
+				//img = &scimage.NewGrayU16(imgRect), "", []float64{d.tiePoint[3], d.pixScale[0], 0, d.tiePoint[4], 0, -1 * d.pixScale[1]}, d.noData}
+				img = scimage.NewGrayU16(imgRect, 0, 65535)
+			} else {
+				img = scimage.NewGrayU8(imgRect, 0, 255)
+			}
+		case sintSample:
+			if d.bpp == 16 {
+				//img = scimage.NewGrayS16(imgRect, -32768, 32767)
+				img = scimage.NewGrayS16(imgRect, 0, 32767)
+			} else {
+				img = scimage.NewGrayS8(imgRect, -128, 127)
+			}
+		default:
+			return nil, FormatError("image data type not implemented")
 		}
 	case mPaletted:
 		img = image.NewPaletted(imgRect, d.palette)
@@ -691,6 +742,8 @@ func Decode(r io.Reader) (img image.Image, err error) {
 		} else {
 			img = image.NewRGBA(imgRect)
 		}
+	default:
+		return nil, FormatError("color model not implemented")
 	}
 
 	for i := 0; i < blocksAcross; i++ {
